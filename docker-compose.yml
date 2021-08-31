@@ -1,0 +1,95 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    build:
+      context: ./
+      dockerfile: db.Dockerfile
+    environment:
+      - POSTGRES_DB=contenter
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=qwerty
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  rabbit:
+    hostname: rabbit
+    image: rabbitmq:3
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD-SHELL", "if rabbitmqctl status; then \nexit 0 \nfi \nexit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  cache:
+    container_name: memcached
+    image: memcached:latest
+    ports:
+      - "11211:11211"
+    entrypoint:
+      - memcached
+      - -m 64
+
+
+  celery:
+    build: ./
+    command: celery -A contenter worker -l info
+    volumes:
+      - ./:/usr/src/app/
+    env_file:
+      - ./.env.dev
+    depends_on:
+      rabbit:
+        condition: service_healthy
+      cache:
+        condition: service_started
+
+
+  runserver:
+    build: ./
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./:/app/
+    ports:
+      - 8000:8000
+    env_file:
+      - ./.env.dev
+    depends_on:
+      cache:
+        condition: service_started
+      celery:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+
+  autotests:
+    build: ./
+    command: python manage.py test
+    volumes:
+      - ./:/app/
+    ports:
+      - 8001:8001
+    env_file:
+      - ./.env.dev
+    depends_on:
+      cache:
+        condition: service_started
+      celery:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
