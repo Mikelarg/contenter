@@ -19,7 +19,7 @@ docker-compose up autotests
 ```
 ### API
 #### Получение списка страниц
-Находится по /api/pages/ 
+Находится по /api/pages/    
 Доступные значения
 ```js
 {
